@@ -1,40 +1,45 @@
-name: Playwright Tests
+name: Playwright Tests with Grafana Reporting
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - '**'
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger of the workflow
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    timeout-minutes: 60 # Set a timeout for the entire job
+    runs-on: ubuntu-latest # Use a GitHub-hosted runner
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4 # Checkout your repository code
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20 # Use a recent Node.js version
 
-      - name: Install dependencies
-        run: npm install
-        
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-        
-      - name: Run Playwright tests
-        run: npx playwright test
+    - name: Install dependencies
+      run: npm ci # Install project dependencies from package-lock.json
 
-      - name: Upload Playwright JSON test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-test-results
-          path: test-results.json
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps # Install necessary browsers for Playwright
+
+    - name: Run Playwright tests and generate JSON report
+      run: npx playwright test --reporter=json,list
+      env:
+        # Ensure the JSON report is named 'test-results.json'
+        PLAYWRIGHT_JSON_OUTPUT_NAME: test-results.json
+
+    - name: Push Test Results to Prometheus Pushgateway
+      # This step executes the Node.js script to parse and push metrics
+      run: |
+        # Make sure push-metrics.js is executable if needed, or just run with node
+        node push-metrics.js
+      env:
+        # IMPORTANT: Replace with the actual URL of your remote Prometheus Pushgateway
+        # This URL must be accessible from the GitHub Actions runner.
+        # Example: http://your-pushgateway-server.com:9091
+        PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }} # Use a GitHub Secret for security
+        GITHUB_RUN_ID: ${{ github.run_id }} # Pass the unique GitHub run ID to the script
